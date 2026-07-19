@@ -1,0 +1,13 @@
+# Data
+data/*
+!data/.gitkeep
+!data/frangieh/
+data/frangieh/*
+!data/frangieh/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
