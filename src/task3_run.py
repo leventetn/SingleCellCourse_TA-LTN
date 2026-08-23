@@ -1,0 +1,89 @@
+"""Task 3 experiment driver: split -> fit -> LOPO hyperparameter search -> evaluate.
+
+Every fitted object (feature scaler, target PCA, floor means) is fitted inside
+``run_split`` on training perturbations only.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+import task3_model as M
+
+
+def _prep(X, Y_rna, Y_adt, tr, te, n_pc):
+    """Fit scaler + target PCA on training rows; transform both sides."""
+    sc = StandardScaler().fit(X[tr])
+    Xtr, Xte = sc.transform(X[tr]), sc.transform(X[te])
+    pca = PCA(n_components=min(n_pc, len(tr) - 1, Y_rna.shape[1])).fit(Y_rna[tr])
+    Ztr = pca.transform(Y_rna[tr])
+    zsc = StandardScaler().fit(Ztr)
+    Ztr = zsc.transform(Ztr)
+    asc = StandardScaler().fit(Y_adt[tr])
+    Atr = asc.transform(Y_adt[tr])
+    return Xtr, Xte, Ztr, Atr, pca, zsc, asc
+
+
+def _inverse(pred_z, pred_a, pca, zsc, asc):
+    return pca.inverse_transform(zsc.inverse_transform(pred_z)), asc.inverse_transform(pred_a)
+
+
+def lopo_cv(X, Y_rna, Y_adt, perts_row, train_perts, grid, n_pc, seed=0):
+    """Leave-one-perturbation-out CV inside the training set only."""
+    rows = []
+    for g in grid:
+        errs = []
+        for hp in train_perts:
+            tr = np.flatnonzero(np.isin(perts_row, [p for p in train_perts if p != hp]))
+            te = np.flatnonzero(perts_row == hp)
+            if len(te) == 0:
+                continue
+            Xtr, Xte, Ztr, Atr, pca, zsc, asc = _prep(X, Y_rna, Y_adt, tr, te, n_pc)
+            net = M.train_net(Xtr, Ztr, Atr, seed=seed, **g)
+            pz, pa = M.predict_net(net, Xte)
+            pr, _ = _inverse(pz, pa, pca, zsc, asc)
+            errs.append(np.mean((pr - Y_rna[te]) ** 2))
+        rows.append({**g, "n_pc": n_pc, "cv_mse": float(np.mean(errs))})
+    return pd.DataFrame(rows).sort_values("cv_mse").reset_index(drop=True)
+
+
+def run_split(name, X, Y_rna, Y_adt, perts_row, cond_row, train_perts, test_perts,
+              best_hp, n_pc, seeds=(0, 1, 2, 3, 4), k=100):
+    """Train the NN (several seeds) and both floors; return per-row metrics."""
+    tr = np.flatnonzero(np.isin(perts_row, train_perts))
+    te = np.flatnonzero(np.isin(perts_row, test_perts))
+    Xtr, Xte, Ztr, Atr, pca, zsc, asc = _prep(X, Y_rna, Y_adt, tr, te, n_pc)
+
+    preds_rna, preds_adt = [], []
+    for s in seeds:
+        net = M.train_net(Xtr, Ztr, Atr, seed=s, **best_hp)
+        pz, pa = M.predict_net(net, Xte)
+        pr, padt = _inverse(pz, pa, pca, zsc, asc)
+        preds_rna.append(pr)
+        preds_adt.append(padt)
+    nn_rna = np.mean(preds_rna, axis=0)
+    nn_adt = np.mean(preds_adt, axis=0)
+
+    fl_rna = M.floor_train_mean(Y_rna[tr], cond_row[tr], cond_row[te])
+    fl_adt = M.floor_train_mean(Y_adt[tr], cond_row[tr], cond_row[te])
+    z_rna = M.floor_zero(len(te), Y_rna.shape[1])
+    z_adt = M.floor_zero(len(te), Y_adt.shape[1])
+
+    out = []
+    for i, ridx in enumerate(te):
+        base = {"split": name, "perturbation": perts_row[ridx], "condition": cond_row[ridx]}
+        for mname, pr, pa in (("nn", nn_rna[i], nn_adt[i]),
+                              ("floor_trainmean", fl_rna[i], fl_adt[i]),
+                              ("floor_zero", z_rna[i], z_adt[i])):
+            rec = {**base, "model": mname}
+            rec.update({f"rna_{a}": b for a, b in M.row_metrics(Y_rna[ridx], pr, k=k).items()})
+            rec.update({f"adt_{a}": b for a, b in M.row_metrics(Y_adt[ridx], pa, k=5).items()})
+            out.append(rec)
+    seed_spread = float(np.std([np.sqrt(np.mean((p - Y_rna[te]) ** 2)) for p in preds_rna]))
+    return pd.DataFrame(out), {"nn_rna": nn_rna, "nn_adt": nn_adt,
+                               "fl_rna": fl_rna, "fl_adt": fl_adt,
+                               "te_idx": te, "seed_rmse_sd": seed_spread,
+                               "pca_evr": float(pca.explained_variance_ratio_.sum())}
