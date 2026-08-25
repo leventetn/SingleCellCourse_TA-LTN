@@ -15,5 +15,10 @@ dependencies:
   - scikit-learn
   - shap
   - pytorch
+  - leidenalg
+  - python-igraph
+  - louvain
+  - tqdm
+  - pyarrow
   - ipykernel
   - jupyterlab

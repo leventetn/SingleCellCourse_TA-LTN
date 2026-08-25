@@ -38,44 +38,147 @@ which is deliberately simplistic.
 
 ## Task 1 approaches
 
-Two model types are used for the condition classification task.
+Two model types are used for the condition classification task, both evaluated with the
+same 5-fold stratified cross-validation over all three conditions.
 
 ### Tree ensemble (XGBoost)
 
-The current implementation is in [notebooks/xgb_classifier_test.ipynb](notebooks/xgb_classifier_test.ipynb):
+Exploratory implementation: [notebooks/xgb_classifier_test.ipynb](notebooks/xgb_classifier_test.ipynb)
+— QC filtering, normalization and log1p, 1000 highly variable genes plus paper marker
+genes, PCA/neighbors/UMAP, XGBoost with 5-fold stratified CV, SHAP feature importance
+shown on UMAPs.
 
-- QC filtering (minimum genes per cell, minimum cells per gene, mitochondrial percentage,
-  total counts), followed by normalization and log1p transformation.
-- Feature selection: 1000 highly variable genes together with a list of differentially
-  expressed marker genes from the paper.
-- PCA, neighbors and UMAP.
-- Label encoding of the condition.
-- XGBoost classifier evaluated with 5-fold stratified cross-validation using balanced
-  accuracy.
-- Feature importance computed with SHAP; the most important features are shown on UMAPs.
+Cross-validated version: [notebooks/task1_feature_importance_cv.ipynb](notebooks/task1_feature_importance_cv.ipynb).
+Two capacities are compared (6 rounds and 400 rounds) to show how much of the accuracy is
+reachable with a very small model. Gene selection is redone **inside each fold** so the HVG
+step cannot see the held-out cells; the size of that leakage is quantified separately by
+`tools/hvg_inside_fold.py` → `data/task1_hvg_leakage_fold0.json`.
 
-### Neural network — planned
+### Neural network (MLP)
 
-<!-- TODO: fill in the details of the neural network approach -->
-- Architecture: _placeholder_
-- Input features: _placeholder_
-- Training setup: _placeholder_
-- Evaluation: _placeholder_
-- Feature importance: _placeholder_
+[notebooks/mlp_classifier_task1.ipynb](notebooks/mlp_classifier_task1.ipynb) — PyTorch MLP
+on the same fold structure and the same feature space as the tree ensembles, so the three
+models are directly comparable. Feature importance is permutation-based and computed per
+fold, which gives an across-fold error bar on every gene rather than a single ranking.
+
+### Task 1 outputs
+
+- [task1_observations.md](task1_observations.md) — measurements and open questions
+- `data/task1_accuracy_table.csv`, `data/task1_cv_results.json` — accuracy per model and fold
+- `data/task1_gene_importance.csv`, `data/task1_fold_importance_long.csv` — importance,
+  aggregated and per fold
+- `data/task1_top20_annotated.csv` — top genes annotated against Reactome and the paper
+- `figures/task1_fig*.png` — importance with error bars, cross-model concordance,
+  confusion matrices, accuracy vs baselines
+
+## Task 2 approach
+
+[notebooks/task2_perturbation_clustering.ipynb](notebooks/task2_perturbation_clustering.ipynb)
+clusters perturbations at two levels and in all three conditions:
+
+- **Cell level** — Leiden clustering per condition, then the question of how much
+  perturbation identity the cell clusters actually carry (ARI against perturbation label).
+- **Perturbation level** — each target reduced to its mean log2FC signature, then six
+  methods compared: Ward/Euclidean, average- and complete-linkage on correlation distance,
+  k-means, DBSCAN and HDBSCAN. DBSCAN's `eps` is chosen from a k-distance plot rather than
+  by hand.
+
+Methods are scored against the pathway modules discussed in the paper (ARI/AMI, module
+recovery) and by bootstrap stability, so the choice of a recommended method is made on
+stated criteria rather than by eye.
+
+Outputs: [task2_observations.md](task2_observations.md), `data/clustering_comparison.csv`,
+`data/module_recovery.csv`, `data/perturbation_clusters.parquet`,
+`data/cell_level_ari_vs_perturbation.csv`, `figures/task2_*.png`.
+
+## Task 3 approach
+
+[notebooks/task3_perturbation_prediction.ipynb](notebooks/task3_perturbation_prediction.ipynb).
+Target: mean log2 fold change per condition and perturbation target.
+
+**Selection.** 50 perturbations from the 210 with at least 50 single-perturbation cells in
+every condition, ranked by the number of genes with |log2FC| > 3×SE. 13 are mandatory so
+that a whole-module holdout is possible (the IFN-γ/JAK-STAT core and the eligible MHC-I
+members); the rest are the strongest remaining signals.
+
+**Three holdouts**, none used in training or hyperparameter selection: 10 random
+perturbations, the 5-member IFN-γ/JAK-STAT module, and the 8-member MHC-I module. Holding
+out whole modules asks the harder question — can the model predict a gene when nothing
+functionally similar was in training?
+
+**Three model types** (feature engineering + learning algorithm):
+
+1. multi-task neural network on engineered target-gene features, predicting the RNA and
+   surface-protein responses jointly
+2. training-mean floor — predict the mean training response, ignoring the target's identity
+3. zero floor — predict no change at all (the deliberately simplistic model)
+
+Uncertainty is bootstrap CIs over held-out perturbation rows, including the **paired**
+network-minus-floor difference, which is the comparison that decides whether the network
+is doing anything.
+
+Outputs: [task3_observations.md](task3_observations.md), `data/task3_metrics.csv`,
+`data/task3_per_perturbation.csv`, `data/task3_splits.json`, `figures/task3_*.png`.
 
 ## Repository structure
 
 ```
 .
-├── data/            
-├── src/             
-│   ├── preprocessing.py   # preprocess()
-│   └── models.py          # fit_xgb()
-├── notebooks/       
-│   └── xgb_classifier_test.ipynb
+├── data/                          # AnnData inputs (untracked) + derived tables
+│   ├── FOUNDATION_VERIFICATION.md # correctness checks on the pseudobulk foundation
+│   └── CACHE_PROVENANCE.json      # what produced each cached table, and when
+├── src/
+│   ├── preprocessing.py           # preprocess()
+│   ├── models.py                  # fit_xgb()
+│   ├── pseudobulk.py              # streamed per-group statistics, log2FC, HVG
+│   ├── task1_cv.py                # cross-validation driver for task 1
+│   ├── task1_figures.py           # task 1 figure builders
+│   ├── task3_features.py          # target-gene feature engineering
+│   ├── task3_model.py             # multi-task network
+│   ├── task3_run.py               # training / evaluation driver
+│   └── figstyle.py                # shared figure style
+├── tools/
+│   ├── task1_figures.py           # renders figures/task1_fig*.png
+│   └── hvg_inside_fold.py         # quantifies HVG selection leakage
+├── notebooks/
+│   ├── raw_data_overview.ipynb            # exploratory
+│   ├── protein_data_overview.ipynb        # exploratory
+│   ├── xgb_classifier_test.ipynb          # task 1, exploratory
+│   ├── perturbation_clustering.ipynb      # task 2, exploratory
+│   ├── task1_feature_importance_cv.ipynb  # task 1, tree ensembles
+│   ├── mlp_classifier_task1.ipynb         # task 1, neural network
+│   ├── task2_perturbation_clustering.ipynb
+│   └── task3_perturbation_prediction.ipynb
+├── figures/
+├── task1_observations.md
+├── task2_observations.md
+├── task3_observations.md
 ├── environment.yml
 └── README.md
 ```
+
+The four `task*` notebooks are the ones that produce the reported results. The others are
+exploratory and are kept for the record.
+
+**Note on `task2_perturbation_clustering.ipynb`:** cells 10–32 (the perturbation-level
+section) have been verified to run clean in order and reproduce every table they write,
+but the notebook is stored **without their outputs** — they were executed as a script.
+Run the notebook top to bottom once to populate them before handing it in. The other
+three `task*` notebooks are stored fully executed with no errors.
+
+## Results
+
+[RESULTS.md](RESULTS.md) collects the measurements from all three tasks in one place. It is
+**generated** by `python tools/build_report.py`, which reads every number directly from the
+tables in `data/` — so the report cannot drift from the results. Re-run it after re-running
+any notebook.
+
+## A note on the observations files
+
+`task1_observations.md`, `task2_observations.md` and `task3_observations.md` record
+**measurements and open questions only** — every number in them is traceable to a table in
+`data/`. The biological interpretation is written by us in the report and the slides, in
+line with the course policy on AI assistance.
 
 ## Data
 
