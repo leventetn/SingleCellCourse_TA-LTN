@@ -13,8 +13,7 @@ can be pulled straight out of the HDF5 arrays with ``h5py`` and reduced to
 per-group sums immediately.  The full matrix is never resident; peak RAM is set
 by the gene-chunk size plus the accumulators, both bounded and both small.
 
-Normalisation convention (the report cites this, so it is stated once here and
-not re-derived anywhere else)
+Normalisation convention
 -----------------------------
 1. Per cell, ``cp10k = count / ncounts * 1e4`` where ``ncounts`` is
    ``obs['ncounts']``.  That column was verified to equal the exact row sum of
@@ -47,7 +46,7 @@ expression distribution is skewed, and mixing them would silently corrupt the
 Task 3 targets.  Controls are always taken from the **same condition** -- the
 three conditions are separate experiments and are never pooled.
 
-Cell-set semantics discovered in this dataset (do not trust the column names)
+Cell-set semantics in this dataset (do not trust the column names)
 ----------------------------------------------------------------------------
 ``obs['nperts']`` is **not** a perturbation count.  It only ever takes the
 values 0 and 1, and it is exactly the indicator ``perturbation != 'control'``
@@ -141,7 +140,7 @@ def read_cell_metadata(h5ad_path: str | Path) -> pd.DataFrame:
 
     Adds
     ----
-    n_targeting_guides, n_guide_tokens, pert_label, qc_pass
+    n_targeting_guides, n_guide_tokens, pert_label
     """
     with h5py.File(str(h5ad_path), "r") as f:
         obs = f["obs"]
@@ -704,7 +703,7 @@ def slice_gene_columns(h5ad_path: str | Path, gene_idx: np.ndarray):
 # protein / CLR
 # --------------------------------------------------------------------------- #
 def clr(mat: np.ndarray) -> np.ndarray:
-    """Centred log ratio as defined in ``notebooks/protein_data_overview.ipynb``.
+    """Centred log ratio
 
     ``log1p`` then subtract the per-cell mean across features.  With only 24
     ADTs -- four of which are isotype controls -- the geometric-mean reference is

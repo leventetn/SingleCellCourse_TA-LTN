@@ -1,6 +1,8 @@
 # Data
 data/*
 !data/.gitkeep
+!data/pathway_labels.csv
+!data/pathway_labels_paper_core.json
 !data/frangieh/
 data/frangieh/*
 !data/frangieh/.gitkeep
