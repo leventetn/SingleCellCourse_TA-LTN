@@ -17,6 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from scipy.stats import pearsonr, spearmanr
+from sklearn.linear_model import Ridge
 
 
 # --------------------------------------------------------------------------- #
@@ -111,6 +112,11 @@ def predict_net(net, X):
     with torch.no_grad():
         pr, pa = net(torch.tensor(X, dtype=torch.float32))
     return pr.numpy().astype(np.float64), pa.numpy().astype(np.float64)
+
+
+def train_ridge(Xtr, Ytr, alpha, seed=123):
+    '''Train a ridge regression model with alpha=alpha'''
+    return Ridge(alpha=alpha, random_state=seed).fit(Xtr, Ytr)
 
 
 # --------------------------------------------------------------------------- #
