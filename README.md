@@ -74,14 +74,11 @@ fold, which gives an across-fold error bar on every gene rather than a single ra
 ## Task 2 approach
 
 [notebooks/task2_perturbation_clustering.ipynb](notebooks/task2_perturbation_clustering.ipynb)
-clusters perturbations at two levels and in all three conditions:
-
-- **Cell level** — Leiden clustering per condition, then the question of how much
-  perturbation identity the cell clusters actually carry (ARI against perturbation label).
-- **Perturbation level** — each target reduced to its mean log2FC signature, then six
-  methods compared: Ward/Euclidean, average- and complete-linkage on correlation distance,
-  k-means, DBSCAN and HDBSCAN. DBSCAN's `eps` is chosen from a k-distance plot rather than
-  by hand.
+clusters perturbations in all three conditions. Every QC-passing cell is first
+assigned by its raw `obs["perturbation"]` value, then expression is averaged within each
+condition and perturbation. Seven methods are compared on those aggregate signatures:
+Ward/Euclidean, average- and complete-linkage on correlation distance, k-means, Leiden,
+DBSCAN and HDBSCAN. DBSCAN's `eps` is chosen from a k-distance plot rather than by hand.
 
 Methods are scored against the pathway modules discussed in the paper (ARI/AMI, module
 recovery) and by bootstrap stability, so the choice of a recommended method is made on
@@ -89,7 +86,8 @@ stated criteria rather than by eye.
 
 Outputs: [task2_observations.md](task2_observations.md), `data/clustering_comparison.csv`,
 `data/module_recovery.csv`, `data/perturbation_clusters.parquet`,
-`data/cell_level_ari_vs_perturbation.csv`, `figures/task2_*.png`.
+`data/task2_perturbation_aggregation.csv`, `data/task2_aggregation_audit.csv`,
+`figures/task2_*.png`.
 
 ## Task 3 approach
 
@@ -129,6 +127,7 @@ Outputs: [task3_observations.md](task3_observations.md), `data/task3_metrics.csv
 │   └── CACHE_PROVENANCE.json      # what produced each cached table, and when
 ├── src/
 │   ├── preprocessing.py           # preprocess()
+│   ├── prepare_data.py             # builds the shared cache and Parquet inputs
 │   ├── models.py                  # fit_xgb()
 │   ├── pseudobulk.py              # streamed per-group statistics, log2FC, HVG
 │   ├── task1_cv.py                # cross-validation driver for task 1
@@ -160,12 +159,6 @@ Outputs: [task3_observations.md](task3_observations.md), `data/task3_metrics.csv
 The four `task*` notebooks are the ones that produce the reported results. The others are
 exploratory and are kept for the record.
 
-**Note on `task2_perturbation_clustering.ipynb`:** cells 10–32 (the perturbation-level
-section) have been verified to run clean in order and reproduce every table they write,
-but the notebook is stored **without their outputs** — they were executed as a script.
-Run the notebook top to bottom once to populate them before handing it in. The other
-three `task*` notebooks are stored fully executed with no errors.
-
 ## Results
 
 [RESULTS.md](RESULTS.md) collects the measurements from all three tasks in one place. It is
@@ -182,8 +175,40 @@ line with the course policy on AI assistance.
 
 ## Data
 
-The dataset is not tracked in git. Place the AnnData files in the `data/`
-directory. The notebooks read from `../data/frangieh`.
+The raw dataset is not tracked in git. Place these two files exactly here:
+
+```
+data/frangieh/rna.h5ad
+data/frangieh/protein.h5ad
+```
+
+Build every shared cache and pseudo-bulk table with one command from the
+repository root:
+
+```
+python src/prepare_data.py
+```
+
+This creates `data/dataset_hv.h5ad`, used by Tasks 1 and 2, plus the `rna_*.parquet`
+and `adt_*.parquet` tables used by Task 3. The script streams the
+gene-major RNA matrix, so it does not load the full 5.5 GB matrix into memory.
+The two small `data/pathway_labels*` reference files are tracked with the code;
+they do not need to be downloaded or regenerated.
+
+### Clean run order
+
+After activating the environment and running `prepare_data.py`, run the four
+canonical notebooks in this order:
+
+1. `notebooks/mlp_classifier_task1.ipynb`
+2. `notebooks/task1_feature_importance_cv.ipynb`
+3. `notebooks/task2_perturbation_clustering.ipynb`
+4. `notebooks/task3_perturbation_prediction.ipynb`
+
+The notebooks resolve the repository root themselves, so they work when
+Jupyter is started from either the repository root or `notebooks/`. Task 2
+creates `data/task2_bootstrap_labels.pkl` on its first clean run and reuses it
+on later runs.
 
 ## Setup
 
