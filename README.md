@@ -105,8 +105,8 @@ functionally similar was in training?
 1. ridge regression on engineered target-gene features, predicting only the RNA response
 2. multi-task neural network on engineered target-gene features, predicting the RNA and
    surface-protein responses jointly
-3. training-mean floor — predict the mean training response, ignoring the target's identity
-4. zero floor — predict no change at all (the deliberately simplistic model)
+3. training-mean floor: predict the mean training response, ignoring the target's identity
+4. zero floor: predict no change at all (the deliberately simplistic model)
 
 Uncertainty is bootstrap CIs over held-out perturbation rows, including the **paired**
 model-minus-floor differences, which are the comparisons that decide whether either
