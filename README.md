@@ -43,27 +43,26 @@ same 5-fold stratified cross-validation over all three conditions.
 
 ### Tree ensemble (XGBoost)
 
-Exploratory implementation: [notebooks/xgb_classifier_test.ipynb](notebooks/xgb_classifier_test.ipynb)
-— QC filtering, normalization and log1p, 1000 highly variable genes plus paper marker
-genes, PCA/neighbors/UMAP, XGBoost with 5-fold stratified CV, SHAP feature importance
-shown on UMAPs.
-
-Cross-validated version: [notebooks/task1_feature_importance_cv.ipynb](notebooks/task1_feature_importance_cv.ipynb).
-Two capacities are compared (6 rounds and 400 rounds) to show how much of the accuracy is
-reachable with a very small model. Gene selection is redone **inside each fold** so the HVG
-step cannot see the held-out cells; the size of that leakage is quantified separately by
-`tools/hvg_inside_fold.py` → `data/task1_hvg_leakage_fold0.json`.
+[notebooks/task1_feature_importance_cv.ipynb](notebooks/task1_feature_importance_cv.ipynb)
+trains XGBoost at two capacities (6 rounds and 400 rounds) to show how much of the accuracy is
+reachable with a very small model. The notebook uses the cached 1,011-gene feature set for
+every fold; because those genes were selected on all cells, the held-out fold is visible to
+the HVG step. That leakage is quantified separately by `tools/hvg_inside_fold.py`, which
+redoes the selection **inside fold 0** and compares the accuracy →
+`data/task1_hvg_leakage_fold0.json` (the optimism is negative, so the cached set is safe to
+use for the reported numbers).
 
 ### Neural network (MLP)
 
-[notebooks/mlp_classifier_task1.ipynb](notebooks/mlp_classifier_task1.ipynb) — PyTorch MLP
-on the same fold structure and the same feature space as the tree ensembles, so the three
-models are directly comparable. Feature importance is permutation-based and computed per
-fold, which gives an across-fold error bar on every gene rather than a single ranking.
+The same notebook, [notebooks/task1_feature_importance_cv.ipynb](notebooks/task1_feature_importance_cv.ipynb),
+also trains a PyTorch MLP (1011 → 128 → 64 → 3, dropout 0.2, Adam, 8 epochs) on the same
+folds and the same feature space as the tree ensembles, so all three models are directly
+comparable. Feature importance is mean |gradient × input| on each fold's held-out cells,
+computed per fold, which gives an across-fold error bar on every gene rather than a single
+ranking.
 
 ### Task 1 outputs
 
-- [task1_observations.md](task1_observations.md) — measurements and open questions
 - `data/task1_accuracy_table.csv`, `data/task1_cv_results.json` — accuracy per model and fold
 - `data/task1_gene_importance.csv`, `data/task1_fold_importance_long.csv` — importance,
   aggregated and per fold
@@ -84,7 +83,7 @@ Methods are scored against the pathway modules discussed in the paper (ARI/AMI, 
 recovery) and by bootstrap stability, so the choice of a recommended method is made on
 stated criteria rather than by eye.
 
-Outputs: [task2_observations.md](task2_observations.md), `data/clustering_comparison.csv`,
+Outputs: `data/clustering_comparison.csv`,
 `data/module_recovery.csv`, `data/perturbation_clusters.parquet`,
 `data/task2_perturbation_aggregation.csv`, `data/task2_aggregation_audit.csv`,
 `figures/task2_*.png`.
@@ -115,7 +114,7 @@ Uncertainty is bootstrap CIs over held-out perturbation rows, including the **pa
 network-minus-floor difference, which is the comparison that decides whether the network
 is doing anything.
 
-Outputs: [task3_observations.md](task3_observations.md), `data/task3_metrics.csv`,
+Outputs: `data/task3_metrics.csv`,
 `data/task3_per_perturbation.csv`, `data/task3_splits.json`, `figures/task3_*.png`.
 
 ## Repository structure
@@ -123,15 +122,10 @@ Outputs: [task3_observations.md](task3_observations.md), `data/task3_metrics.csv
 ```
 .
 ├── data/                          # AnnData inputs (untracked) + derived tables
-│   ├── FOUNDATION_VERIFICATION.md # correctness checks on the pseudobulk foundation
-│   └── CACHE_PROVENANCE.json      # what produced each cached table, and when
 ├── src/
-│   ├── preprocessing.py           # preprocess()
-│   ├── prepare_data.py             # builds the shared cache and Parquet inputs
-│   ├── models.py                  # fit_xgb()
+│   ├── prepare_data.py            # builds the shared cache and Parquet inputs
 │   ├── pseudobulk.py              # streamed per-group statistics, log2FC, HVG
 │   ├── task1_cv.py                # cross-validation driver for task 1
-│   ├── task1_figures.py           # task 1 figure builders
 │   ├── task3_features.py          # target-gene feature engineering
 │   ├── task3_model.py             # multi-task network
 │   ├── task3_run.py               # training / evaluation driver
@@ -140,38 +134,15 @@ Outputs: [task3_observations.md](task3_observations.md), `data/task3_metrics.csv
 │   ├── task1_figures.py           # renders figures/task1_fig*.png
 │   └── hvg_inside_fold.py         # quantifies HVG selection leakage
 ├── notebooks/
-│   ├── raw_data_overview.ipynb            # exploratory
-│   ├── protein_data_overview.ipynb        # exploratory
-│   ├── xgb_classifier_test.ipynb          # task 1, exploratory
-│   ├── perturbation_clustering.ipynb      # task 2, exploratory
-│   ├── task1_feature_importance_cv.ipynb  # task 1, tree ensembles
-│   ├── mlp_classifier_task1.ipynb         # task 1, neural network
+│   ├── task1_feature_importance_cv.ipynb  # task 1, tree ensembles + MLP
 │   ├── task2_perturbation_clustering.ipynb
 │   └── task3_perturbation_prediction.ipynb
 ├── figures/
-├── task1_observations.md
-├── task2_observations.md
-├── task3_observations.md
 ├── environment.yml
 └── README.md
 ```
 
-The four `task*` notebooks are the ones that produce the reported results. The others are
-exploratory and are kept for the record.
-
-## Results
-
-[RESULTS.md](RESULTS.md) collects the measurements from all three tasks in one place. It is
-**generated** by `python tools/build_report.py`, which reads every number directly from the
-tables in `data/` — so the report cannot drift from the results. Re-run it after re-running
-any notebook.
-
-## A note on the observations files
-
-`task1_observations.md`, `task2_observations.md` and `task3_observations.md` record
-**measurements and open questions only** — every number in them is traceable to a table in
-`data/`. The biological interpretation is written by us in the report and the slides, in
-line with the course policy on AI assistance.
+These three notebooks produce all the reported results.
 
 ## Data
 
@@ -195,21 +166,6 @@ gene-major RNA matrix, so it does not load the full 5.5 GB matrix into memory.
 The two small `data/pathway_labels*` reference files are tracked with the code;
 they do not need to be downloaded or regenerated.
 
-### Clean run order
-
-After activating the environment and running `prepare_data.py`, run the four
-canonical notebooks in this order:
-
-1. `notebooks/mlp_classifier_task1.ipynb`
-2. `notebooks/task1_feature_importance_cv.ipynb`
-3. `notebooks/task2_perturbation_clustering.ipynb`
-4. `notebooks/task3_perturbation_prediction.ipynb`
-
-The notebooks resolve the repository root themselves, so they work when
-Jupyter is started from either the repository root or `notebooks/`. Task 2
-creates `data/task2_bootstrap_labels.pkl` on its first clean run and reuses it
-on later runs.
-
 ## Setup
 
 Create the conda environment and activate it:
@@ -218,6 +174,20 @@ Create the conda environment and activate it:
 conda env create -f environment.yml
 conda activate sc-course-2026
 ```
+
+### Clean run order
+
+After activating the environment and running `prepare_data.py`, run the three
+canonical notebooks in this order:
+
+1. `notebooks/task1_feature_importance_cv.ipynb`
+2. `notebooks/task2_perturbation_clustering.ipynb`
+3. `notebooks/task3_perturbation_prediction.ipynb`
+
+The notebooks resolve the repository root themselves, so they work when
+Jupyter is started from either the repository root or `notebooks/`. Task 2
+creates `data/task2_bootstrap_labels.pkl` on its first clean run and reuses it
+on later runs.
 
 ## Course description
 
