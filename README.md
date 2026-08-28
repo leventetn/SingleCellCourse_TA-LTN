@@ -103,12 +103,13 @@ perturbations, the 5-member IFN-γ/JAK-STAT module, and the 8-member MHC-I modul
 out whole modules asks the harder question — can the model predict a gene when nothing
 functionally similar was in training?
 
-**Three model types** (feature engineering + learning algorithm):
+**Two more complex models and two deliberately simplistic baselines** (feature engineering + learning algorithm):
 
-1. multi-task neural network on engineered target-gene features, predicting the RNA and
+1. ridge regression on engineered target-gene features, predicting only the RNA response
+2. multi-task neural network on engineered target-gene features, predicting the RNA and
    surface-protein responses jointly
-2. training-mean floor — predict the mean training response, ignoring the target's identity
-3. zero floor — predict no change at all (the deliberately simplistic model)
+3. training-mean floor — predict the mean training response, ignoring the target's identity
+4. zero floor — predict no change at all (the deliberately simplistic model)
 
 Uncertainty is bootstrap CIs over held-out perturbation rows, including the **paired**
 network-minus-floor difference, which is the comparison that decides whether the network
@@ -127,22 +128,22 @@ Outputs: `data/task3_metrics.csv`,
 │   ├── pseudobulk.py              # streamed per-group statistics, log2FC, HVG
 │   ├── task1_cv.py                # cross-validation driver for task 1
 │   ├── task3_features.py          # target-gene feature engineering
-│   ├── task3_model.py             # multi-task network
+│   ├── task3_model.py             # multi-task network and ridge regression
 │   ├── task3_run.py               # training / evaluation driver
 │   └── figstyle.py                # shared figure style
 ├── tools/
 │   ├── task1_figures.py           # renders figures/task1_fig*.png
 │   └── hvg_inside_fold.py         # quantifies HVG selection leakage
 ├── notebooks/
-│   ├── task1_feature_importance_cv.ipynb  # task 1, tree ensembles + MLP
-│   ├── task2_perturbation_clustering.ipynb
-│   └── task3_perturbation_prediction.ipynb
+│   ├── task1_feature_importance_cv.ipynb    # main task 1 notebook
+│   ├── task2_perturbation_clustering.ipynb  # main task 2 notebook
+│   └── task3_perturbation_prediction.ipynb  # main task 3 notebook
 ├── figures/
 ├── environment.yml
 └── README.md
 ```
 
-These three notebooks produce all the reported results.
+The three jupyter notebooks produce all the reported results.
 
 ## Data
 
@@ -189,11 +190,3 @@ Jupyter is started from either the repository root or `notebooks/`. Task 2
 creates `data/task2_bootstrap_labels.pkl` on its first clean run and reuses it
 on later runs.
 
-## Course description
-
-This course will teach approaches to machine learning, applied to single-cell multiomics
-data analysis tasks such as batch integration, clustering, cell type annotation,
-differential gene expression, and analysis of gene regulatory mechanisms. Machine learning
-methods covered will include both classical approaches (linear models, tree ensembles) as
-well as deep learning with PyTorch. The focus will be on practical aspects critical to
-rigorous training and evaluation of models.
