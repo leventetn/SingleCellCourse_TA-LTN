@@ -88,21 +88,23 @@ def run_split(name, X, Y_rna, Y_adt, perts_row, cond_row, train_perts, test_pert
         pr, padt = _inverse(pz, pa, pca, zsc, asc)
         preds_rna.append(pr)
         preds_adt.append(padt)
+        
     nn_rna = np.mean(preds_rna, axis=0)
     nn_adt = np.mean(preds_adt, axis=0)
 
-    # ridge regression
+    # ridge features
     X_sub = X[:, ridge_feats]
     scaler = StandardScaler().fit(X_sub[tr])
-    Xtr, Xte = scaler.transform(X_sub[tr]), scaler.transform(X_sub[te])
-    ridge_rna = M.train_ridge(Xtr, Y_rna[tr], ridge_alpha).predict(Xte)
-
+    rXtr, rXte = scaler.transform(X_sub[tr]), scaler.transform(X_sub[te])
+    # ridge regression
+    ridge_rna = M.train_ridge(rXtr, Y_rna[tr], ridge_alpha, s).predict(rXte)
+    
     fl_rna = M.floor_train_mean(Y_rna[tr], cond_row[tr], cond_row[te])
     fl_adt = M.floor_train_mean(Y_adt[tr], cond_row[tr], cond_row[te])
     z_rna = M.floor_zero(len(te), Y_rna.shape[1])
     z_adt = M.floor_zero(len(te), Y_adt.shape[1])
-
-    out = []
+    
+    out, ridge_residues = [], []
     for i, ridx in enumerate(te):
         base = {"split": name, "perturbation": perts_row[ridx], "condition": cond_row[ridx]}
         for mname, pr, pa in (("nn", nn_rna[i], nn_adt[i]),
@@ -113,9 +115,12 @@ def run_split(name, X, Y_rna, Y_adt, perts_row, cond_row, train_perts, test_pert
             rec.update({f"rna_{a}": b for a, b in M.row_metrics(Y_rna[ridx], pr, k=k).items()})
             if mname != "ridge":
                 rec.update({f"adt_{a}": b for a, b in M.row_metrics(Y_adt[ridx], pa, k=5).items()})
+            else:
+                ridge_residues.append(np.abs(Y_rna[ridx] - pr))
             out.append(rec)
     seed_spread = float(np.std([np.sqrt(np.mean((p - Y_rna[te]) ** 2)) for p in preds_rna]))
+    ridge_q95 = np.percentile(np.concatenate(ridge_residues), 95)
     return pd.DataFrame(out), {"nn_rna": nn_rna, "nn_adt": nn_adt, "ridge_rna": ridge_rna,
                                "fl_rna": fl_rna, "fl_adt": fl_adt,
-                               "te_idx": te, "seed_rmse_sd": seed_spread,
+                               "te_idx": te, "seed_rmse_sd": seed_spread, "ridge_q95": ridge_q95,
                                "pca_evr": float(pca.explained_variance_ratio_.sum())}
