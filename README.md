@@ -26,8 +26,7 @@ models are trained, and feature importance is computed for each.
 
 ### Task 2: Clustering
 Which genetic perturbations show similar effects, if any? Which clustering method(s) best
-capture(s) the underlying biology? Different clustering methods are applied, visualized and
-compared, and the results are interpreted biologically.
+capture(s) the underlying biology? 
 
 ### Task 3: Perturbation Prediction
 Can a model predict transcriptome changes for a gene that was not knocked out in the
@@ -56,10 +55,9 @@ use for the reported numbers).
 
 The same notebook, [notebooks/task1_feature_importance_cv.ipynb](notebooks/task1_feature_importance_cv.ipynb),
 also trains a PyTorch MLP (1011 → 128 → 64 → 3, dropout 0.2, Adam, 8 epochs) on the same
-folds and the same feature space as the tree ensembles, so all three models are directly
+folds and the same feature space as the tree ensembles, so all three models are 
 comparable. Feature importance is mean |gradient × input| on each fold's held-out cells,
-computed per fold, which gives an across-fold error bar on every gene rather than a single
-ranking.
+computed per fold, which gives an across-fold error bar on every gene.
 
 ### Task 1 outputs
 
@@ -77,11 +75,10 @@ clusters perturbations in all three conditions. Every QC-passing cell is first
 assigned by its raw `obs["perturbation"]` value, then expression is averaged within each
 condition and perturbation. Seven methods are compared on those aggregate signatures:
 Ward/Euclidean, average- and complete-linkage on correlation distance, k-means, Leiden,
-DBSCAN and HDBSCAN. DBSCAN's `eps` is chosen from a k-distance plot rather than by hand.
+DBSCAN and HDBSCAN. DBSCAN's `eps` is chosen from a k-distance plot.
 
 Methods are scored against the pathway modules discussed in the paper (ARI/AMI, module
-recovery) and by bootstrap stability, so the choice of a recommended method is made on
-stated criteria rather than by eye.
+recovery) and by bootstrap stability.
 
 Outputs: `data/clustering_comparison.csv`,
 `data/module_recovery.csv`, `data/perturbation_clusters.parquet`,
@@ -100,7 +97,7 @@ members); the rest are the strongest remaining signals.
 
 **Three holdouts**, none used in training or hyperparameter selection: 10 random
 perturbations, the 5-member IFN-γ/JAK-STAT module, and the 8-member MHC-I module. Holding
-out whole modules asks the harder question — can the model predict a gene when nothing
+out whole modules: can the model predict a gene when nothing
 functionally similar was in training?
 
 **Two more complex models and two deliberately simplistic baselines** (feature engineering + learning algorithm):
@@ -112,8 +109,8 @@ functionally similar was in training?
 4. zero floor — predict no change at all (the deliberately simplistic model)
 
 Uncertainty is bootstrap CIs over held-out perturbation rows, including the **paired**
-network-minus-floor difference, which is the comparison that decides whether the network
-is doing anything.
+model-minus-floor differences, which are the comparisons that decide whether either
+learning model is doing anything.
 
 Outputs: `data/task3_metrics.csv`,
 `data/task3_per_perturbation.csv`, `data/task3_splits.json`, `figures/task3_*.png`.
